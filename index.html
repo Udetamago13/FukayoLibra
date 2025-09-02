@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, minimum-scale=0.01">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>エルデソリソグ ナイトレイソ～深き夜のリブラ～(人形ちゃんver.)</title>
     <style>
         body {
@@ -21,16 +21,14 @@
             flex-direction: column;
             align-items: center;
             position: relative;
-            transform-origin: center center; /* ズームの中心をコンテナ中央に */
         }
         #gameCanvas {
             background-color: #EDC9AF;
             border: 2px solid black;
-            touch-action: none;
         }
         #gameTitle {
             font-family: Arial, sans-serif;
-            font-size: 18px; /* 縮小時の視認性を考慮 */
+            font-size: 20px; /* 元のサイズに復元 */
             color: black;
             text-align: center;
             margin-bottom: 10px;
@@ -51,8 +49,6 @@
         const gameCtx = gameCanvas.getContext('2d');
         const animationCanvas = document.getElementById('animationCanvas');
         const animationCtx = animationCanvas.getContext('2d');
-        const gameContainer = document.getElementById('gameContainer');
-        const gameTitle = document.getElementById('gameTitle');
 
         // 設定値
         const CONFIG = {
@@ -88,87 +84,38 @@
         let lastMadnessAttackTime = 0;
         let lastSummonAttackTime = 0;
 
-        // ズーム状態
-        let scale = 1;
-        const minScale = 0.01; // 縮小力を大幅強化
-        const maxScale = 1.5;
-        let offsetX = 0;
-        let offsetY = 0;
-        let initialDistance = 0;
-        let initialScale = 1;
-        let pinchCenterX = 0;
-        let pinchCenterY = 0;
-        let isPinching = false;
-        let targetScale = 1;
-        const smoothingFactor = 0.1;
-
-        // アニメーション状態
-        let animationOffset = 0;
-        const animationSpeed = 0.05;
-        const animationAmplitude = 20;
-
-        // 音声
-        const makeYourChoiceSound = new Audio('make_your_choice.mp3');
-        const libraBgm = new Audio('libra_bgm.mp3');
-        libraBgm.loop = true;
-        libraBgm.volume = CONFIG.bgmVolume;
-        const damageBgm = new Audio('damage_bgm.mp3');
-
         // 入力処理
         let mouseX = gameCanvas.width / 2;
         let mouseY = gameCanvas.height - 50;
         let keys = {};
+        let isTouching = false;
 
         gameCanvas.addEventListener('mousemove', (e) => {
             const rect = gameCanvas.getBoundingClientRect();
-            mouseX = (e.clientX - rect.left - offsetX) / scale;
-            mouseY = (e.clientY - rect.top - offsetY) / scale;
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
         });
 
         gameCanvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            isTouching = true;
             const rect = gameCanvas.getBoundingClientRect();
-            if (e.touches.length === 1) {
-                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
-                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
-            } else if (e.touches.length === 2) {
-                isPinching = true;
-                const dx = e.touches[0].clientX - e.touches[1].clientX;
-                const dy = e.touches[0].clientY - e.touches[1].clientY;
-                initialDistance = Math.sqrt(dx * dx + dy * dy);
-                initialScale = scale;
-                pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-                pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-            }
+            mouseX = e.touches[0].clientX - rect.left;
+            mouseY = e.touches[0].clientY - rect.top;
         }, { passive: false });
 
         gameCanvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const rect = gameCanvas.getBoundingClientRect();
-            if (e.touches.length === 1 && !isPinching) {
-                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
-                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
-            } else if (e.touches.length === 2) {
-                const dx = e.touches[0].clientX - e.touches[1].clientX;
-                const dy = e.touches[0].clientY - e.touches[1].clientY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const scaleChange = (distance / initialDistance - 1) * 0.02 + 1; // 感度を0.02に
-                targetScale = Math.max(minScale, Math.min(maxScale, initialScale * scaleChange));
-
-                // オフセット調整（コンテナ全体のズームなので簡略化）
-                offsetX = (gameCanvas.width * (1 - targetScale)) / 2;
-                offsetY = (gameCanvas.height * (1 - targetScale)) / 2;
+            if (isTouching) {
+                const rect = gameCanvas.getBoundingClientRect();
+                mouseX = e.touches[0].clientX - rect.left;
+                mouseY = e.touches[0].clientY - rect.top;
             }
         }, { passive: false });
 
         gameCanvas.addEventListener('touchend', (e) => {
             e.preventDefault();
-            isPinching = false;
-            if (e.touches.length === 1) {
-                const rect = gameCanvas.getBoundingClientRect();
-                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
-                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
-            }
+            isTouching = false;
         }, { passive: false });
 
         gameCanvas.addEventListener('click', handleClick);
@@ -232,22 +179,20 @@
             choiceSelected = null;
             gameState = 'title';
             titlePhase = 'doll';
-            scale = 1;
-            targetScale = 1;
-            offsetX = 0;
-            offsetY = 0;
-            gameContainer.style.transform = `scale(${scale})`;
-            gameTitle.style.transform = `scale(${scale})`;
+            mouseX = gameCanvas.width / 2;
+            mouseY = gameCanvas.height - 50;
             libraBgm.play();
         }
 
+        // 音声
+        const makeYourChoiceSound = new Audio('make_your_choice.mp3');
+        const libraBgm = new Audio('libra_bgm.mp3');
+        libraBgm.loop = true;
+        libraBgm.volume = CONFIG.bgmVolume;
+        const damageBgm = new Audio('damage_bgm.mp3');
+
         function update() {
             if (gameState !== 'playing') return;
-
-            // スケールのスムージング
-            scale += (targetScale - scale) * smoothingFactor;
-            gameContainer.style.transform = `scale(${scale})`;
-            gameTitle.style.transform = `scale(${scale})`;
 
             // プレイヤー移動
             if (keys['ArrowLeft']) player.x -= CONFIG.playerSpeed;
@@ -360,11 +305,6 @@
         function draw() {
             gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            gameCtx.save();
-            gameCtx.translate(offsetX, offsetY);
-            // Canvas内スケールはコンテナで適用するため不要
-            // gameCtx.scale(scale, scale);
-
             if (gameState === 'title') {
                 gameCtx.fillStyle = 'black';
                 gameCtx.font = '18px Arial';
@@ -463,8 +403,6 @@
                 gameCtx.textAlign = 'left';
             }
 
-            gameCtx.restore();
-
             animationCtx.clearRect(0, 0, animationCanvas.width, animationCanvas.height);
             animationCtx.fillStyle = 'black';
             const characters = [
@@ -482,6 +420,11 @@
             });
             animationCtx.textAlign = 'left';
         }
+
+        // アニメーション状態
+        let animationOffset = 0;
+        const animationSpeed = 0.05;
+        const animationAmplitude = 20;
 
         function gameLoop() {
             update();
