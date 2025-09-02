@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, minimum-scale=0.4">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, minimum-scale=0.01">
     <title>エルデソリソグ ナイトレイソ～深き夜のリブラ～(人形ちゃんver.)</title>
     <style>
         body {
@@ -21,6 +21,7 @@
             flex-direction: column;
             align-items: center;
             position: relative;
+            transform-origin: center center; /* ズームの中心をコンテナ中央に */
         }
         #gameCanvas {
             background-color: #EDC9AF;
@@ -29,7 +30,7 @@
         }
         #gameTitle {
             font-family: Arial, sans-serif;
-            font-size: 20px;
+            font-size: 18px; /* 縮小時の視認性を考慮 */
             color: black;
             text-align: center;
             margin-bottom: 10px;
@@ -50,6 +51,8 @@
         const gameCtx = gameCanvas.getContext('2d');
         const animationCanvas = document.getElementById('animationCanvas');
         const animationCtx = animationCanvas.getContext('2d');
+        const gameContainer = document.getElementById('gameContainer');
+        const gameTitle = document.getElementById('gameTitle');
 
         // 設定値
         const CONFIG = {
@@ -87,7 +90,7 @@
 
         // ズーム状態
         let scale = 1;
-        const minScale = 0.4; // 縮小力を強化
+        const minScale = 0.01; // 縮小力を大幅強化
         const maxScale = 1.5;
         let offsetX = 0;
         let offsetY = 0;
@@ -96,8 +99,8 @@
         let pinchCenterX = 0;
         let pinchCenterY = 0;
         let isPinching = false;
-        let targetScale = 1; // スムージング用ターゲットスケール
-        const smoothingFactor = 0.1; // スケール変化の滑らかさ
+        let targetScale = 1;
+        const smoothingFactor = 0.1;
 
         // アニメーション状態
         let animationOffset = 0;
@@ -149,18 +152,12 @@
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                const scaleChange = (distance / initialDistance - 1) * 0.01 + 1; // 感度を0.01に
+                const scaleChange = (distance / initialDistance - 1) * 0.02 + 1; // 感度を0.02に
                 targetScale = Math.max(minScale, Math.min(maxScale, initialScale * scaleChange));
 
-                // オフセット調整
-                const prevCenterX = (pinchCenterX - offsetX) / scale;
-                const prevCenterY = (pinchCenterY - offsetY) / scale;
-                offsetX = pinchCenterX - prevCenterX * targetScale;
-                offsetY = pinchCenterY - prevCenterY * targetScale;
-
-                // オフセット制限
-                offsetX = Math.min(0, Math.max(gameCanvas.width * (1 - targetScale), offsetX));
-                offsetY = Math.min(0, Math.max(gameCanvas.height * (1 - targetScale), offsetY));
+                // オフセット調整（コンテナ全体のズームなので簡略化）
+                offsetX = (gameCanvas.width * (1 - targetScale)) / 2;
+                offsetY = (gameCanvas.height * (1 - targetScale)) / 2;
             }
         }, { passive: false });
 
@@ -239,6 +236,8 @@
             targetScale = 1;
             offsetX = 0;
             offsetY = 0;
+            gameContainer.style.transform = `scale(${scale})`;
+            gameTitle.style.transform = `scale(${scale})`;
             libraBgm.play();
         }
 
@@ -247,6 +246,8 @@
 
             // スケールのスムージング
             scale += (targetScale - scale) * smoothingFactor;
+            gameContainer.style.transform = `scale(${scale})`;
+            gameTitle.style.transform = `scale(${scale})`;
 
             // プレイヤー移動
             if (keys['ArrowLeft']) player.x -= CONFIG.playerSpeed;
@@ -357,20 +358,19 @@
         }
 
         function draw() {
-            // ゲーム画面
             gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            // スケールとオフセットを適用
             gameCtx.save();
             gameCtx.translate(offsetX, offsetY);
-            gameCtx.scale(scale, scale);
+            // Canvas内スケールはコンテナで適用するため不要
+            // gameCtx.scale(scale, scale);
 
             if (gameState === 'title') {
                 gameCtx.fillStyle = 'black';
-                gameCtx.font = '18px Arial'; // フォントサイズを18pxに縮小
+                gameCtx.font = '18px Arial';
                 gameCtx.textAlign = 'center';
                 if (titlePhase === 'doll') {
-                    gameCtx.fillText('💀: 人形ちゃん', gameCanvas.width / 2, 150); // Y座標を調整
+                    gameCtx.fillText('💀: 人形ちゃん', gameCanvas.width / 2, 150);
                     gameCtx.fillText('スキルとアーツとエスト瓶とアイテム、', gameCanvas.width / 2, 170);
                     gameCtx.fillText('その他もろもろは深度5なので', gameCanvas.width / 2, 190);
                     gameCtx.fillText('使えません。', gameCanvas.width / 2, 210);
@@ -380,13 +380,13 @@
                     gameCtx.fillText('投げっ放しです。戻って来ません。', gameCanvas.width / 2, 190);
                     gameCtx.fillText('色も青いです。', gameCanvas.width / 2, 210);
                 } else if (titlePhase === 'choice') {
-                    gameCtx.font = '28px Arial'; // メイク・ユア・チョイスのサイズも微調整
+                    gameCtx.font = '28px Arial';
                     gameCtx.fillText('メイク・ユア・チョイス', gameCanvas.width / 2, gameCanvas.height / 2);
                 }
                 gameCtx.textAlign = 'left';
             } else if (gameState === 'choice') {
                 gameCtx.fillStyle = 'black';
-                gameCtx.font = '18px Arial'; // 選択画面も18pxに
+                gameCtx.font = '18px Arial';
                 gameCtx.textAlign = 'center';
                 gameCtx.fillText('飛躍的にレベルアップしたい', gameCanvas.width / 2, 200);
                 gameCtx.fillText('状態異常に強くなりたい', gameCanvas.width / 2, 250);
@@ -397,9 +397,8 @@
                 gameCtx.fillText('🧥', gameCanvas.width / 2, gameCanvas.height / 2 - 150);
                 gameCtx.textAlign = 'left';
             } else if (gameState === 'playing') {
-                // ゲージ（プレイヤー）
                 gameCtx.fillStyle = 'black';
-                gameCtx.font = '18px Arial'; // レベル表記も18pxに
+                gameCtx.font = '18px Arial';
                 gameCtx.fillText(player.level === 15 ? '⑮' : '⑬', 10, 60);
                 gameCtx.fillStyle = 'red';
                 gameCtx.fillRect(50, 40, player.hp * 15, 10);
@@ -412,43 +411,36 @@
                     gameCtx.fillRect(gameCanvas.width / 2 - 75, gameCanvas.height / 2 - 10, madnessGauge * 150, 20);
                 }
 
-                // リブラのHPゲージ
                 gameCtx.fillStyle = 'red';
                 const maxHp = choiceSelected === 3 ? 105 : 70;
                 gameCtx.fillRect((gameCanvas.width - 480) / 2, gameCanvas.height - 30, 480 * (libra.hp / maxHp), 5);
 
-                // プレイヤー
                 gameCtx.fillStyle = 'black';
                 gameCtx.font = `${player.size}px Arial`;
                 gameCtx.fillText('💀', player.x - player.size / 2, player.y);
                 
-                // リブラ
                 gameCtx.fillStyle = 'black';
                 gameCtx.font = `${libra.size}px Arial`;
                 gameCtx.fillText('🐐', libra.x - libra.size / 2, libra.y);
                 
-                // 光輪
                 gameCtx.fillStyle = 'blue';
                 gameCtx.font = `${CONFIG.haloSize}px Arial`;
                 halos.forEach(halo => {
                     gameCtx.fillText('🌀', halo.x - halo.size / 2, halo.y);
                 });
                 
-                // 発狂攻撃
                 gameCtx.fillStyle = 'purple';
                 gameCtx.font = `${CONFIG.madnessAttackSize}px Arial`;
                 madnessAttacks.forEach(attack => {
                     gameCtx.fillText('👁', attack.x - attack.size / 2, attack.y);
                 });
                 
-                // 召喚攻撃
                 gameCtx.fillStyle = 'gray';
                 gameCtx.font = `${CONFIG.summonAttackSize}px Arial`;
                 summonAttacks.forEach(attack => {
                     gameCtx.fillText('👤', attack.x - attack.size / 2, attack.y);
                 });
                 
-                // コイン
                 gameCtx.fillStyle = 'gold';
                 gameCtx.font = '18px Arial';
                 coins.forEach(coin => {
@@ -456,7 +448,7 @@
                 });
             } else if (gameState === 'gameover') {
                 gameCtx.fillStyle = 'red';
-                gameCtx.font = '36px Arial'; // ゲームオーバーも微調整
+                gameCtx.font = '36px Arial';
                 gameCtx.textAlign = 'center';
                 gameCtx.fillText('ユー・ダイド', gameCanvas.width / 2, gameCanvas.height / 2);
                 gameCtx.fillStyle = 'black';
@@ -473,7 +465,6 @@
 
             gameCtx.restore();
 
-            // アニメーション描画（ズーム影響なし）
             animationCtx.clearRect(0, 0, animationCanvas.width, animationCanvas.height);
             animationCtx.fillStyle = 'black';
             const characters = [
