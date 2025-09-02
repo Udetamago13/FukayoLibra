@@ -14,6 +14,7 @@
             height: 100vh;
             overflow: hidden;
             flex-direction: column;
+            touch-action: none; /* ブラウザのデフォルトズームを無効化 */
         }
         #gameContainer {
             display: flex;
@@ -24,6 +25,7 @@
         #gameCanvas {
             background-color: #EDC9AF; /* 砂漠色 */
             border: 2px solid black;
+            touch-action: none; /* Canvasでのピンチ操作を有効化 */
         }
         #gameTitle {
             font-family: Arial, sans-serif;
@@ -38,7 +40,7 @@
     </style>
 </head>
 <body>
-    <div id="gameTitle">エルデソリソグ ナイトレイソ～深き夜のリブラ～(人形ちゃんソロver.)</div>
+    <div id="gameTitle">エルデソリソグ ナイトレイソ～深き夜のリブラ～(人形ちゃんver.)</div>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="600" height="600"></canvas>
         <canvas id="animationCanvas" width="600" height="100"></canvas>
@@ -59,7 +61,7 @@
             libraMadnessAttackFrequency: 600, // 頻度5倍
             libraSummonAttackFrequency: 5000, // ミリ秒
             madnessAttackSpeed: 3,
-            summonAttackSpeed: 6, // 速度2倍
+            summonAttackSpeed: 4, // 速度2倍
             summonTrackingStrength: 0.05,
             madnessAttackSize: 15, // 表示サイズ
             summonAttackSize: 20, // 絵文字の表示サイズ
@@ -71,7 +73,7 @@
         let gameState = 'title';
         let titlePhase = 'doll'; // 'doll'（人形ちゃん説明）, 'halo'（光輪説明）, 'choice'（メイク・ユア・チョイス）
         let player = { x: gameCanvas.width / 2, y: gameCanvas.height - 50, level: 13, hp: 10, fp: 100, stamina: 11, size: 20 };
-        let libra = { x: gameCanvas.width / 2, y: 100, hp: 70, size: 60 }; // デフォルトHPを70に
+        let libra = { x: gameCanvas.width / 2, y: 100, hp: 70, size: 60 }; // デフォルトHPを70
         let halos = [];
         let madnessAttacks = [];
         let summonAttacks = [];
@@ -82,6 +84,18 @@
         let lastWarpTime = 0;
         let lastMadnessAttackTime = 0;
         let lastSummonAttackTime = 0;
+
+        // ズーム状態
+        let scale = 1; // 初期スケール
+        const minScale = 0.5; // 最小0.5倍
+        const maxScale = 2.0; // 最大2.0倍
+        let offsetX = 0; // CanvasのXオフセット
+        let offsetY = 0; // CanvasのYオフセット
+        let initialDistance = 0; // ピンチ開始時の指の距離
+        let initialScale = 1; // ピンチ開始時のスケール
+        let pinchCenterX = 0; // ピンチの中心X
+        let pinchCenterY = 0; // ピンチの中心Y
+        let isPinching = false; // ピンチ中フラグ
 
         // アニメーション状態
         let animationOffset = 0;
@@ -101,14 +115,63 @@
         let keys = {};
         gameCanvas.addEventListener('mousemove', (e) => {
             const rect = gameCanvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
+            // スケールとオフセットを考慮してマウス座標を変換
+            mouseX = (e.clientX - rect.left - offsetX) / scale;
+            mouseY = (e.clientY - rect.top - offsetY) / scale;
         });
+        gameCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = gameCanvas.getBoundingClientRect();
+            if (e.touches.length === 1) {
+                // シングルタッチで移動
+                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
+                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
+            } else if (e.touches.length === 2) {
+                // ピンチイン・ピンチアウト開始
+                isPinching = true;
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                initialDistance = Math.hypot(dx, dy);
+                initialScale = scale;
+                pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+            }
+        }, { passive: false });
         gameCanvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             const rect = gameCanvas.getBoundingClientRect();
-            mouseX = e.touches[0].clientX - rect.left;
-            mouseY = e.touches[0].clientY - rect.top;
+            if (e.touches.length === 1) {
+                // シングルタッチで移動
+                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
+                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
+            } else if (e.touches.length === 2) {
+                // ピンチイン・ピンチアウト
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const distance = Math.hypot(dx, dy);
+                const newScale = initialScale * (distance / initialDistance);
+                // スケール範囲を制限
+                scale = Math.max(minScale, Math.min(maxScale, newScale));
+
+                // ピンチ中心を基準にオフセットを調整
+                const newCenterX = (pinchCenterX - offsetX) / initialScale;
+                const newCenterY = (pinchCenterY - offsetY) / initialScale;
+                offsetX = pinchCenterX - newCenterX * scale;
+                offsetY = pinchCenterY - newCenterY * scale;
+
+                // オフセットをCanvas内に制限
+                offsetX = Math.min(0, Math.max(gameCanvas.width * (1 - scale), offsetX));
+                offsetY = Math.min(0, Math.max(gameCanvas.height * (1 - scale), offsetY));
+            }
+        }, { passive: false });
+        gameCanvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isPinching = false;
+            if (e.touches.length === 1) {
+                const rect = gameCanvas.getBoundingClientRect();
+                mouseX = (e.touches[0].clientX - rect.left - offsetX) / scale;
+                mouseY = (e.touches[0].clientY - rect.top - offsetY) / scale;
+            }
         }, { passive: false });
         gameCanvas.addEventListener('click', handleClick);
         document.addEventListener('keydown', (e) => {
@@ -162,7 +225,7 @@
 
         function resetGame() {
             player = { x: gameCanvas.width / 2, y: gameCanvas.height - 50, level: 13, hp: 10, fp: 100, stamina: 11, size: 20 };
-            libra = { x: gameCanvas.width / 2, y: 100, hp: 70, size: 60 }; // リセット時HPを70に
+            libra = { x: gameCanvas.width / 2, y: 100, hp: 70, size: 60 }; // リセット時HPを70
             halos = [];
             madnessAttacks = [];
             summonAttacks = [];
@@ -171,6 +234,9 @@
             choiceSelected = null;
             gameState = 'title';
             titlePhase = 'doll';
+            scale = 1; // ズームリセット
+            offsetX = 0;
+            offsetY = 0;
             libraBgm.play();
         }
 
@@ -289,6 +355,11 @@
             // ゲーム画面
             gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
+            // スケールとオフセットを適用
+            gameCtx.save();
+            gameCtx.translate(offsetX, offsetY);
+            gameCtx.scale(scale, scale);
+
             if (gameState === 'title') {
                 gameCtx.fillStyle = 'black';
                 gameCtx.font = '20px Arial';
@@ -395,7 +466,9 @@
                 gameCtx.textAlign = 'left';
             }
 
-            // アニメーション描画
+            gameCtx.restore();
+
+            // アニメーション描画（ズーム影響なし）
             animationCtx.clearRect(0, 0, animationCanvas.width, animationCanvas.height);
             animationCtx.fillStyle = 'black';
             const characters = [
